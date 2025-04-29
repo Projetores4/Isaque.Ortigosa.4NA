@@ -1,87 +1,62 @@
 import streamlit as st
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-import torch
-import numpy as np
+import random
+import openai
 
-# Configuração da página
-st.set_page_config(page_title="Análise de Sentimentos Avançada", layout="wide")
+# Configure sua chave da API da OpenAI
+openai.api_key = "SUA_CHAVE_DA_API_OPENAI"
 
-# Título e descrição
-st.title("Análise de Sentimentos Avançada com BERT")
-st.markdown("""
-Esta aplicação utiliza um modelo BERT pré-treinado para analisar o sentimento de textos.
-O modelo classifica o texto como positivo, negativo ou neutro.
-""")
+def gerar_saudacao():
+    saudacoes = ["Olá!", "Oi!", "E aí!", "Saudações!", "Como vai?"]
+    return random.choice(saudacoes)
 
-# Carregando o modelo e o tokenizer
-@st.cache_resource
-def load_model():
-    tokenizer = AutoTokenizer.from_pretrained("assemblyai/distilbert-base-uncased-sst2")
-    model = AutoModelForSequenceClassification.from_pretrained("assemblyai/distilbert-base-uncased-sst2")
-    return tokenizer, model
+def obter_resposta_ia(mensagem):
+    try:
+        response = openai.Completion.create(
+            model="text-davinci-003",  # Escolha o modelo desejado
+            prompt=mensagem,
+            max_tokens=150,
+            n=1,
+            stop=None,
+            temperature=0.7,
+        )
+        return response.choices[0].text.strip()
+    except Exception as e:
+        return f"Ocorreu um erro ao conectar com a IA: {e}"
 
-tokenizer, model = load_model()
+# Inicialize mensagem_usuario com uma string vazia
+if 'mensagem_usuario' not in st.session_state:
+    st.session_state['mensagem_usuario'] = ""
 
-# Função para prever o sentimento
-def predict_sentiment(text):
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512)
-    with torch.no_grad():
-        outputs = model(**inputs)
-    
-    probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
-    probabilities = probabilities.numpy()[0]
-    
-    # Mapear os índices para os rótulos
-    labels = ["Negativo", "Positivo"]
-    results = {label: float(prob) for label, prob in zip(labels, probabilities)}
-    
-    return results
+# Inicialize o estado da conversa (se ainda não tiver)
+if 'historico_chat' not in st.session_state:
+    st.session_state['historico_chat'] = []
 
-# Interface do usuário
-col1, col2 = st.columns([2, 1])
+# Área para o usuário digitar a mensagem
+mensagem_usuario = st.text_input("Você:", key="input_usuario", value=st.session_state['mensagem_usuario'])
 
-with col1:
-    text_input = st.text_area("Digite o texto para análise:", height=200)
-    analyze_button = st.button("Analisar Sentimento")
+# Lógica quando o usuário envia uma mensagem
+if mensagem_usuario:
+    # Atualiza o valor em session_state
+    st.session_state['mensagem_usuario'] = mensagem_usuario
 
-# Exemplos de textos
-with col2:
-    st.subheader("Exemplos de Textos")
-    example_texts = [
-        "Eu adorei este produto! É incrível e superou todas as minhas expectativas.",
-        "Estou muito decepcionado com o serviço. Foi horrível e não recomendo.",
-        "O filme foi ok, nem bom nem ruim."
-    ]
-    
-    for i, example in enumerate(example_texts):
-        if st.button(f"Exemplo {i+1}", key=f"example_{i}"):
-            text_input = example
-            st.session_state.text_input = example
-            analyze_button = True
+    # Adiciona a mensagem do usuário ao histórico
+    st.session_state['historico_chat'].append({"usuario": mensagem_usuario})
 
-# Análise e exibição dos resultados
-if analyze_button and text_input:
-    st.subheader("Resultado da Análise")
-    
-    with st.spinner("Analisando o sentimento..."):
-        sentiment_results = predict_sentiment(text_input)
-    
-    # Exibindo os resultados
-    col_res1, col_res2 = st.columns(2)
-    
-    with col_res1:
-        st.subheader("Probabilidades")
-        for label, prob in sentiment_results.items():
-            st.metric(label=label, value=f"{prob*100:.2f}%")
-    
-    with col_res2:
-        st.subheader("Visualização")
-        chart_data = {label: [prob] for label, prob in sentiment_results.items()}
-        st.bar_chart(chart_data)
-    
-    # Determinando o sentimento predominante
-    predominant_sentiment = max(sentiment_results.items(), key=lambda x: x[1])[0]
-    confidence = max(sentiment_results.values())
-    
-    st.subheader("Conclusão")
-    st.markdown(f"O texto tem um sentimento predominantemente **{predominant_sentiment}** com {confidence*100:.2f}% de confiança.")
+    if mensagem_usuario.lower() == "olá":
+        resposta_chatbot = gerar_saudacao()
+        st.session_state['historico_chat'].append({"chatbot": resposta_chatbot})
+    else:
+        # Conecta com a IA para obter uma resposta
+        resposta_ia = obter_resposta_ia(mensagem_usuario)
+        st.session_state['historico_chat'].append({"chatbot": resposta_ia})
+
+    # Limpa a caixa de entrada após o envio
+    st.session_state["input_usuario"] = ""
+
+# Exibe o histórico do chat
+st.subheader("Histórico do Chat")
+for mensagem in st.session_state['historico_chat']:
+    if "usuario" in mensagem:
+        st.write(f"**Você:** {mensagem['usuario']}")
+    elif "chatbot" in mensagem:
+        st.write(f"**Chatbot:** {mensagem['chatbot']}")

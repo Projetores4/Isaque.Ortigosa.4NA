@@ -1,13 +1,13 @@
 import streamlit as st
 from transformers import pipeline
 
+
 # Título do aplicativo
 st.title("Aplicativo de Análise de Sentimentos com Hugging Face Transformers")
 
 # Área de texto para entrada do usuário
 text = st.text_area("Por favor, escreva sua sentença:")
 
-# Carregando o modelo (com cache para melhor performance)
 @st.cache_resource
 def load_model():
     return pipeline(model="lxyuan/distilbert-base-multilingual-cased-sentiments-student", 
@@ -15,7 +15,7 @@ def load_model():
 
 model = load_model()
 
-# Botão para executar a análise
+
 if st.button("Análise de Sentimentos"):
     if text.strip():
         try:
